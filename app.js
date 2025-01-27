@@ -3,7 +3,9 @@ const logger = require('morgan');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const Joi = require('joi');
-const DB_URI = 'mongodb+srv://rebecavoicilas:testinggoit@cluster0.n9vph.mongodb.net/db-contacts?retryWrites=true&w=majority'; // Înlocuiește cu link-ul tău MongoDB Atlas
+require('dotenv').config(); // Încarcă variabilele din fișierul .env
+
+const DB_URI = process.env.DB_URI; // Folosește URL-ul din variabila de mediu
 
 mongoose.connect(DB_URI)
   .then(() => {
@@ -13,6 +15,7 @@ mongoose.connect(DB_URI)
     console.error('Database connection error:', err);
     process.exit(1);
   });
+
 
 const contactSchema = new mongoose.Schema({
   name: {
