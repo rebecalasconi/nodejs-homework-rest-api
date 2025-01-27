@@ -1,156 +1,159 @@
 const express = require('express');
 const logger = require('morgan');
 const cors = require('cors');
-const fs = require('fs');
+const mongoose = require('mongoose');
 const Joi = require('joi');
-const { nanoid } = require('nanoid');
+const DB_URI = 'mongodb+srv://rebecavoicilas:testinggoit@cluster0.n9vph.mongodb.net/db-contacts?retryWrites=true&w=majority'; // Înlocuiește cu link-ul tău MongoDB Atlas
+
+mongoose.connect(DB_URI)
+  .then(() => {
+    console.log('Database connection successful');
+  })
+  .catch((err) => {
+    console.error('Database connection error:', err);
+    process.exit(1);
+  });
+
+const contactSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    required: [true, 'Set name for contact'],
+  },
+  email: {
+    type: String,
+  },
+  phone: {
+    type: String,
+  },
+  favorite: {
+    type: Boolean,
+    default: false,
+  },
+});
+
+const Contact = mongoose.model('Contact', contactSchema);
 
 const app = express();
 
-// Middleware
 app.use(logger('dev'));
 app.use(cors());
 app.use(express.json());
 
-const path = require('path');
-const contactsFilePath = path.join(__dirname, 'models', 'contacts.json');
-
-const listContacts = () => {
-  try {
-    const data = fs.readFileSync(contactsFilePath, 'utf8');
-    return JSON.parse(data);
-  } catch (err) {
-    console.error('Error reading contacts file:', err);
-    throw new Error('Could not read contacts data');
-  }
-};
-
-const writeContacts = (contacts) => {
-  try {
-    fs.writeFileSync(contactsFilePath, JSON.stringify(contacts, null, 2));
-  } catch (err) {
-    console.error('Error writing contacts file:', err);
-    throw new Error('Could not write contacts data');
-  }
-};
-
-const contactSchema = Joi.object({
+const contactValidationSchema = Joi.object({
   name: Joi.string().min(3).required(),
   email: Joi.string().email().required(),
   phone: Joi.string().pattern(/^[0-9]+$/).required(),
 });
 
-app.get('/api/contacts', (req, res) => {
-  const contacts = listContacts();
-  res.status(200).json(contacts);
-});
-
-const getById = (id) => {
-  const contacts = listContacts();
-  return contacts.find(contact => contact.id === id);
-};
-
-app.get('/api/contacts/:id', (req, res) => {
-  const contact = getById(req.params.id);
-
-  if (contact) {
-    res.status(200).json(contact);
-  } else {
-    res.status(404).json({ message: 'Not found' });
+app.get('/api/contacts', async (req, res) => {
+  try {
+    const contacts = await Contact.find();
+    res.status(200).json(contacts);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 });
 
-const addContact = (contact) => {
-  const contacts = listContacts();
-  contacts.push(contact);
-  writeContacts(contacts);
-};
+app.get('/api/contacts/:id', async (req, res) => {
+  try {
+    const contact = await Contact.findById(req.params.id);
 
-app.post('/api/contacts', (req, res) => {
+    if (contact) {
+      res.status(200).json(contact);
+    } else {
+      res.status(404).json({ message: 'Not found' });
+    }
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.post('/api/contacts', async (req, res) => {
   const { name, email, phone } = req.body;
 
-  if (!name) {
-    return res.status(400).json({ message: 'missing required name field' });
-  }
-  if (!email) {
-    return res.status(400).json({ message: 'missing required email field' });
-  }
-  if (!phone) {
-    return res.status(400).json({ message: 'missing required phone field' });
+  if (!name || !email || !phone) {
+    return res.status(400).json({ message: 'Missing required fields' });
   }
 
-  const { error } = contactSchema.validate(req.body);
+  const { error } = contactValidationSchema.validate(req.body);
 
   if (error) {
     return res.status(400).json({ message: error.details[0].message });
   }
 
-  const newContact = {
-    id: nanoid(),
-    ...req.body,
-  };
-
-  addContact(newContact);
-  res.status(201).json(newContact);
-});
-
-const removeContact = (id) => {
-  const contacts = listContacts();
-  const contactIndex = contacts.findIndex(contact => contact.id === id);
-
-  if (contactIndex !== -1) {
-    contacts.splice(contactIndex, 1);
-    writeContacts(contacts);
-    return true;
-  }
-  return false;
-};
-
-app.delete('/api/contacts/:id', (req, res) => {
-  const contactId = req.params.id;
-  const isDeleted = removeContact(contactId);
-
-  if (isDeleted) {
-    res.status(200).json({ message: 'Contact deleted' });
-  } else {
-    res.status(404).json({ message: 'Not found' });
+  try {
+    const newContact = new Contact({ name, email, phone });
+    await newContact.save();
+    res.status(201).json(newContact);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 });
 
-const updateContact = (contactId, updatedData) => {
-  const contacts = listContacts();
-  const contactIndex = contacts.findIndex(contact => contact.id === contactId);
+app.delete('/api/contacts/:id', async (req, res) => {
+  try {
+    const deletedContact = await Contact.findByIdAndDelete(req.params.id);
 
-  if (contactIndex !== -1) {
-    contacts[contactIndex] = { ...contacts[contactIndex], ...updatedData };
-    writeContacts(contacts);
-    return contacts[contactIndex];
+    if (deletedContact) {
+      res.status(200).json({ message: 'Contact deleted' });
+    } else {
+      res.status(404).json({ message: 'Not found' });
+    }
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
-  return null; 
-};
+});
 
-app.put('/api/contacts/:id', (req, res) => {
-  const { id } = req.params;
+app.put('/api/contacts/:id', async (req, res) => {
   const { name, email, phone } = req.body;
 
   if (!name && !email && !phone) {
     return res.status(400).json({ message: 'Missing required name, email, or phone field' });
   }
 
-  const { error } = contactSchema.validate(req.body);
+  const { error } = contactValidationSchema.validate(req.body);
 
   if (error) {
     return res.status(400).json({ message: error.details[0].message });
   }
 
-  const updatedContact = updateContact(id, req.body);
+  try {
+    const updatedContact = await Contact.findByIdAndUpdate(req.params.id, req.body, { new: true });
 
-  if (updatedContact) {
-    res.status(200).json(updatedContact);
-  } else {
-    res.status(404).json({ message: 'Not found' });
+    if (updatedContact) {
+      res.status(200).json(updatedContact);
+    } else {
+      res.status(404).json({ message: 'Not found' });
+    }
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 });
+
+app.patch('/api/contacts/:id/favorite', async (req, res) => {
+  const { favorite } = req.body;
+
+  if (favorite === undefined) {
+    return res.status(400).json({ message: 'missing field favorite' });
+  }
+
+  try {
+    const updatedContact = await Contact.findByIdAndUpdate(
+      req.params.id,
+      { favorite },
+      { new: true }
+    );
+
+    if (updatedContact) {
+      res.status(200).json(updatedContact);
+    } else {
+      res.status(404).json({ message: 'Not found' });
+    }
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 app.use((req, res) => {
   res.status(404).json({ message: 'Not found' });
 });
@@ -165,4 +168,3 @@ app.listen(port, () => {
 });
 
 module.exports = app;
-
