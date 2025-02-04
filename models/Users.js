@@ -1,8 +1,8 @@
+
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-
-// Definirea schema utilizatorului
+require('dotenv').config();
 const userSchema = new mongoose.Schema({
   email: {
     type: String,
@@ -24,7 +24,6 @@ const userSchema = new mongoose.Schema({
   },
 });
 
-// Criptarea parolei înainte de a salva utilizatorul
 userSchema.pre('save', async function (next) {
   if (this.isModified('password')) {
     this.password = await bcrypt.hash(this.password, 10);
@@ -32,14 +31,13 @@ userSchema.pre('save', async function (next) {
   next();
 });
 
-// Metodă pentru generarea token-ului
 userSchema.methods.generateAuthToken = function () {
-  const token = jwt.sign({ id: this._id }, 'secret_key', { expiresIn: '1h' });
+  const token = jwt.sign({ id: this._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+  console.log(this._id)
   this.token = token;
   return token;
 };
 
-// Crearea modelului User
 const User = mongoose.model('User', userSchema);
 
 module.exports = User;

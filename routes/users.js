@@ -3,6 +3,7 @@ const Joi = require('joi');
 const bcrypt = require('bcryptjs');
 const User = require('../models/Users');
 const auth = require('../middleware/auth');
+require('dotenv').config();
 
 const router = express.Router();
 
@@ -35,6 +36,9 @@ router.post('/signup', async (req, res) => {
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
 
+  const { error } = userSchema.validate(req.body);
+  if (error) return res.status(400).json({ message: error.details[0].message });
+
   const user = await User.findOne({ email });
   if (!user) return res.status(401).json({ message: 'Email or password is wrong' });
 
@@ -42,6 +46,16 @@ router.post('/login', async (req, res) => {
   if (!isMatch) return res.status(401).json({ message: 'Email or password is wrong' });
 
   const token = user.generateAuthToken();
+
+  user.token = token; 
+
+  try {
+    await user.save();
+  
+  } catch (error) {
+    return res.status(500).json({ message: 'Error saving user with token', error });
+  }
+
   res.status(200).json({
     token,
     user: {
@@ -50,6 +64,7 @@ router.post('/login', async (req, res) => {
     },
   });
 });
+
 
 // Endpoint pentru logout utilizator
 router.get('/logout', auth, async (req, res) => {

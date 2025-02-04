@@ -1,4 +1,4 @@
-require('dotenv').config(); // Încarcă variabilele din fișierul .env
+require('dotenv').config();
 
 const express = require('express');
 const logger = require('morgan');
@@ -17,9 +17,7 @@ app.use(express.json());
 app.use('/api/users', usersRouter);
 
 // Conectare la MongoDB
-const DB_URI = process.env.DB_URI; // Folosește URL-ul din variabila de mediu
-
-// Verifică dacă conexiunea a fost deja stabilită
+const DB_URI = process.env.DB_URI;
 mongoose.connection.once('open', () => {
   console.log('MongoDB connection established');
 });
@@ -31,10 +29,9 @@ mongoose.connect(DB_URI)
   })
   .catch((err) => {
     console.error('Database connection error:', err);
-    process.exit(1); // Închide aplicația în caz de eroare de conexiune
+    process.exit(1);
   });
 
-// Închide conexiunea la MongoDB când aplicația este oprită
 process.on('SIGINT', () => {
   mongoose.connection.close(() => {
     console.log('MongoDB connection closed due to app termination');
@@ -43,7 +40,7 @@ process.on('SIGINT', () => {
 });
 
 
-const port = process.env.PORT || 3002;
+const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
 });
