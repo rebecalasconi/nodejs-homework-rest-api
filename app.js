@@ -5,8 +5,10 @@ const logger = require('morgan');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const usersRouter = require('./routes/users');
+const path = require('path');
 
 const app = express();
+app.use('/avatars', express.static(path.join(__dirname, 'public', 'avatars')));
 
 // Middleware
 app.use(logger('dev'));
